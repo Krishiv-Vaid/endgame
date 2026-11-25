@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64 (Apple Clang, armv8-neon)
+            os: macos-15
+            cxx: clang++
+            arch: armv8-neon
+          - name: Linux x86-64 (GCC, avx2)
+            os: ubuntu-24.04
+            cxx: g++
+            arch: avx2
+          - name: Linux x86-64 (Clang, avx2)
+            os: ubuntu-24.04
+            cxx: clang++
+            arch: avx2
+          - name: Linux x86-64 (Clang, x86-64-v2)
+            os: ubuntu-24.04
+            cxx: clang++
+            arch: x86-64-v2
+          - name: Linux x86-64 (GCC, avx512)
+            os: ubuntu-24.04
+            cxx: g++
+            arch: avx512
+          - name: Linux x86-64 (Clang, Debug + ASan/UBSan)
+            os: ubuntu-24.04
+            cxx: clang++
+            arch: x86-64-v2
+            debug: true
+          - name: Windows x86-64 (Clang, avx2)
+            os: windows-2022
+            cxx: clang++
+            arch: avx2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja -y --no-progress
+
+      - name: Check CPU support
+        id: cpu
+        shell: bash
+        run: |
+          run=true
+          if [ "${{ matrix.arch }}" = "avx512" ]; then
+            grep -q avx512bw /proc/cpuinfo || run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "Can run binaries: $run"
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "${{ matrix.debug }}" = "true" ]; then
+            extra="-DCMAKE_BUILD_TYPE=Debug -DENDGAME_SANITIZE=ON"
+          else
+            extra="-DCMAKE_BUILD_TYPE=Release"
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+                -DENDGAME_ARCH=${{ matrix.arch }} $extra
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Unit tests + perft
+        if: steps.cpu.outputs.run == 'true'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Bench
+        if: steps.cpu.outputs.run == 'true'
+        shell: bash
+        run: |
+          exe=./build/endgame
+          [ -f ./build/endgame.exe ] && exe=./build/endgame.exe
+          $exe bench | tee bench.txt
+          tail -1 bench.txt
