@@ -133,6 +133,7 @@ if(ENDGAME_TESTS)
   target_include_directories(endgame_tests SYSTEM PRIVATE tests/third_party)
   target_link_libraries(endgame_tests PRIVATE endgame_core)
   target_compile_definitions(endgame_tests PRIVATE
-      ENDGAME_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests")
+      ENDGAME_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests"
+      DOCTEST_CONFIG_USE_STD_HEADERS)
   add_test(NAME unit COMMAND endgame_tests)
 endif()
