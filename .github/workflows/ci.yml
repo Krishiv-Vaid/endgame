@@ -89,7 +89,13 @@ jobs:
 
       - name: Unit tests + perft
         if: steps.cpu.outputs.run == 'true'
-        run: ctest --test-dir build --output-on-failure
+        shell: bash
+        run: |
+          # Sanitizer builds are ~20x slower: keep the suite but cap depth.
+          if [ "${{ matrix.debug }}" = "true" ]; then
+            export ENDGAME_PERFT_MAX_NODES=300000 ENDGAME_FUZZ_MOVES=30000
+          fi
+          ctest --test-dir build --output-on-failure
 
       - name: Bench
         if: steps.cpu.outputs.run == 'true'
