@@ -4,6 +4,11 @@
 #include <cstdio>
 #include <cstdlib>
 
+#if __has_include("hce_params.inc")
+#include "hce_params.inc"
+#define ENDGAME_HAVE_TUNED_PARAMS 1
+#endif
+
 namespace endgame {
 
 namespace hce {
@@ -59,6 +64,11 @@ void init_default_params() {
     params[P_SHIELD + 1] = S{5, 0};
     for (int u = 0; u < KING_DANGER_COUNT; ++u) params[P_KING_DANGER + u] = S{-(u * u) / 3, -u};
     params[P_TEMPO] = S{15, 5};
+
+#ifdef ENDGAME_HAVE_TUNED_PARAMS
+    static_assert(TUNED_PARAM_COUNT == PARAM_COUNT, "hce_params.inc is out of date: re-run the tuner");
+    for (int i = 0; i < PARAM_COUNT; ++i) params[i] = TUNED_PARAMS[i];
+#endif
 }
 
 const char* param_name(int i, char* buf, int n) {

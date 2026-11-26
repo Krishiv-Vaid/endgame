@@ -137,3 +137,12 @@ if(ENDGAME_TESTS)
       DOCTEST_CONFIG_USE_STD_HEADERS)
   add_test(NAME unit COMMAND endgame_tests)
 endif()
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+option(ENDGAME_TOOLS "Build developer tools (Texel tuner)" ON)
+if(ENDGAME_TOOLS)
+  add_executable(texel tools/texel/texel.cpp)
+  target_link_libraries(texel PRIVATE endgame_core)
+endif()
