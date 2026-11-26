@@ -4,7 +4,8 @@
 # gainer: elo0=0 elo1=5; nonreg: elo0=-5 elo1=0; alpha = beta = 0.05.
 # STC 8+0.08, LTC 40+0.4; 1 thread, Hash 16, UHO_Lichess_4852_v1 openings.
 # Prints the result and appends a row to PROGRESS.md's Elo log.
-# Env: CONCURRENCY (default 8), BOOK, FASTCHESS, NO_LOG=1 to skip PROGRESS.md.
+# Env: CONCURRENCY (default 8), BOOK, FASTCHESS, NO_LOG=1 to skip PROGRESS.md,
+#      MAX_ROUNDS (default 10000 = 20,000 games; hitting it = inconclusive, treated as a fail).
 set -euo pipefail
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 cd "$root"
@@ -44,7 +45,7 @@ caffeinate -dimsu "$fastchess" \
   -engine cmd="$base_bin" name="base-$base_sha" \
   -each tc="$tc" option.Hash=16 option.Threads=1 \
   -openings file="$book" format=epd order=random \
-  -games 2 -rounds 100000 -repeat -recover \
+  -games 2 -rounds "${MAX_ROUNDS:-10000}" -repeat -recover \
   -sprt $bounds alpha=0.05 beta=0.05 \
   -concurrency "$concurrency" \
   -pgnout file="tools/results/$tag.pgn" \

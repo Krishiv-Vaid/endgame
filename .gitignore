@@ -84,3 +84,6 @@ __pycache__/
 /tools/results/
 *.pgn
 .DS_Store
+
+# fastchess autosave/resume state
+config.json
