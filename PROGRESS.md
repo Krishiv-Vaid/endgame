@@ -29,6 +29,7 @@ Every strength-affecting change, pass or fail.
 
 | Date | Commit | Change | SPRT result | Gauntlet Elo |
 |---|---|---|---|---|
+| 2026-11-26 | 266a219 | eval: Texel-tuned HCE weights (gen 1), 4.0M self-play positions | STC 8+0.08 [0, 5]: Elo +95.3 ± 23.6, LLR 2.96, 762 games, ptnml [33, 35, 127, 67, 119] — **PASSED**. 24 games forfeited when the Mac slept on battery (lid closed); excluding those pairs: +97.9 ± 24.1 over 736 games | |
 
 ## Notes and measurements
 
