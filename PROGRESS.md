@@ -47,6 +47,20 @@ Every strength-affecting change, pass or fail.
 - The Kiwipete FEN in the build brief is missing the black pawn on h3 (`…/2N2Q2/…` should be `…/2N2Q1p/…`); with the correct FEN all published counts match.
 - nps varies with thermal state and background load (fanless M4); range given is across runs.
 
+### M2 — baseline search (2026-11-25)
+
+- Bench: 44,570,288 nodes at depth 6 (50 positions), ~7.1M nps on the M4. Deterministic across runs.
+- Sanity matches (self-play, 8+0.08, 8 concurrent, UHO openings) found three bugs before a clean run:
+  1. 12 ms time loss: the clock started when the search thread started, not when `go` arrived. Fixed.
+  2. Crash (SIGBUS): iterative deepening reached depth 228 in a mate-in-1 position and overflowed macOS's 512 KB
+     secondary-thread stack. Search/datagen threads now get a 16 MB stack; regression test added.
+  3. Three 1–15 ms time losses: the bank drained to ~100 ms living on the increment, leaving too little slack for OS
+     jitter. The increment share now shrinks below 10 increments of bank, hard cap 50% of usable time.
+- **Clean sanity run (commit a978db1): 1000 games, 0 time losses, 0 illegal moves, 0 crashes/stalls.** All games ended
+  by mate (795) or a rules draw (126 repetition, 45 insufficient material, 31 fifty-move, 3 stalemate). Self-play
+  score 48.35% (Elo −11.5 ± 11.4, same binary both sides: noise). `tools/results/sanity-a978db1.*` (not committed).
+- Ordering in the baseline is MVV-LVA only; TT-move ordering is deliberately left as the first M4 SPRT.
+
 ## Next steps
 
 1. M2: baseline search (alpha-beta, PVS, qsearch, TT, MVV-LVA), time management, HCE, bench.
