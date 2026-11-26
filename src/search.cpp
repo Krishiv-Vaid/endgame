@@ -21,7 +21,7 @@ struct ScoredMoves {
     int count = 0;
     int next = 0;
 
-    ScoredMoves(const Position& pos, const MoveList& list) {
+    ScoredMoves(const Position& pos, const MoveList& list, Move tt_move = Move::none()) {
         for (Move m : list) {
             int s = 0;
             if (m.is_capture()) {
@@ -30,6 +30,7 @@ struct ScoredMoves {
                 s = 1000 + MVV_LVA_VALUE[victim] * 16 - MVV_LVA_VALUE[attacker];
             }
             if (m.is_promotion()) s += m.promotion_type() == QUEEN ? 1000 + 9 * 16 : -2000;
+            if (m == tt_move) s = 1'000'000;  // TT move first
             moves[count] = m;
             scores[count++] = s;
         }
@@ -171,7 +172,7 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
     MoveList list;
     generate<GEN_ALL>(pos_, list);
     if (!list.size()) return in_check ? mated_in(ply) : 0;
-    ScoredMoves picker(pos_, list);
+    ScoredMoves picker(pos_, list, tte.move);
 
     int best_score = -VALUE_INF;
     Move best_move = Move::none();
@@ -246,7 +247,7 @@ int Worker::qsearch(int alpha, int beta, int ply) {
         generate<GEN_NOISY>(pos_, list);
     }
 
-    ScoredMoves picker(pos_, list);
+    ScoredMoves picker(pos_, list, tte.move);
     Move best_move = Move::none();
     while (Move m = picker.pick()) {
         // Delta pruning: even winning the captured piece can't reach alpha.
