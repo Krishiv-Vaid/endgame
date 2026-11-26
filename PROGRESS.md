@@ -42,7 +42,7 @@ Every strength-affecting change, pass or fail.
 | `r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -` | 5 | 15,833,292 | match | |
 
 - Standard perftsuite (126 positions, `tests/perft/standard.epd`): **all depths match**, uncapped (12.5 s).
-- Chess960 suite (960 positions, `tests/perft/chess960.epd`): all 4,493 (position, depth) pairs up to 20M nodes match; full uncapped run: see below.
+- Chess960 suite (960 positions, `tests/perft/chess960.epd`): full uncapped run: **all 5,760 (position, depth) pairs match** (every depth to D6).
 - Fuzz: 5,000,000+ make/unmake pairs from every suite position (5.19M assertions) — bitboards, mailbox, Zobrist/pawn/non-pawn keys, checkers and `gives_check` all consistent; unmake restores the exact FEN and key.
 - The Kiwipete FEN in the build brief is missing the black pawn on h3 (`…/2N2Q2/…` should be `…/2N2Q1p/…`); with the correct FEN all published counts match.
 - nps varies with thermal state and background load (fanless M4); range given is across runs.
