@@ -126,6 +126,7 @@ SearchResult Worker::run(const Position& root, const SearchLimits& limits, bool 
         if (print) print_info(depth, score, now_ms() - start);
 
         if (stop_flag_) break;
+        if (limits.soft_nodes && nodes_ >= limits.soft_nodes) break;
         if (tm_.enabled() && !engine_.pondering.load(std::memory_order_relaxed) &&
             tm_.elapsed() >= tm_.soft())
             break;

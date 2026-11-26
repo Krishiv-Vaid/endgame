@@ -21,7 +21,8 @@ struct SearchLimits {
     int movestogo = 0;
     int depth = 0;
     TimePoint movetime = 0;
-    std::uint64_t nodes = 0;
+    std::uint64_t nodes = 0;       // hard node limit
+    std::uint64_t soft_nodes = 0;  // no new iteration after this many nodes
     bool infinite = false;
     bool ponder = false;
 

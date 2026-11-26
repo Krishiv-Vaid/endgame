@@ -6,6 +6,7 @@
 #include <string>
 
 #include "bench.h"
+#include "datagen.h"
 #include "eval_hce.h"
 #include "init.h"
 #include "perft.h"
@@ -143,6 +144,21 @@ bool handle_command(UciState& u, const std::string& line) {
         is >> depth;
         Position copy = u.pos;
         divide(copy, depth, std::cout, token == "divide");
+    } else if (token == "datagen") {
+        // datagen [threads N] [positions N] [nodes N] [hardnodes N] [plies N] [seed N] [out PREFIX]
+        DatagenOptions o;
+        std::string key;
+        while (is >> key) {
+            if (key == "out") is >> o.output;
+            else if (key == "threads") is >> o.threads;
+            else if (key == "positions") is >> o.positions;
+            else if (key == "nodes") is >> o.soft_nodes;
+            else if (key == "hardnodes") is >> o.hard_nodes;
+            else if (key == "plies") is >> o.random_plies;
+            else if (key == "seed") is >> o.seed;
+        }
+        u.engine.stop();
+        run_datagen(o);
     } else if (token == "bench") {
         int depth = 0;
         is >> depth;
