@@ -1,18 +1,23 @@
 #include "uci.h"
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <string>
 
+#include "bench.h"
+#include "eval_hce.h"
 #include "init.h"
 #include "perft.h"
 #include "position.h"
+#include "search.h"
 
 namespace endgame {
 
 namespace {
 
 struct UciState {
+    Engine engine;
     Position pos;
     bool chess960 = false;
 };
@@ -45,6 +50,52 @@ void cmd_position(UciState& u, std::istringstream& is) {
     u.pos = p;
 }
 
+SearchLimits parse_go(std::istringstream& is) {
+    SearchLimits l;
+    std::string token;
+    auto read = [&is](auto& v) {
+        long long x = 0;
+        if (is >> x) v = std::max(0LL, x);
+    };
+    while (is >> token) {
+        if (token == "wtime") read(l.time[WHITE]);
+        else if (token == "btime") read(l.time[BLACK]);
+        else if (token == "winc") read(l.inc[WHITE]);
+        else if (token == "binc") read(l.inc[BLACK]);
+        else if (token == "movestogo") read(l.movestogo);
+        else if (token == "depth") read(l.depth);
+        else if (token == "nodes") read(l.nodes);
+        else if (token == "movetime") read(l.movetime);
+        else if (token == "infinite") l.infinite = true;
+        else if (token == "ponder") l.ponder = true;
+    }
+    if (!l.use_time() && !l.depth && !l.nodes) l.infinite = true;
+    return l;
+}
+
+void cmd_setoption(UciState& u, std::istringstream& is) {
+    std::string name, value, t;
+    is >> t;  // "name"
+    while (is >> t && t != "value") name += (name.empty() ? "" : " ") + t;
+    while (is >> t) value += (value.empty() ? "" : " ") + t;
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+    auto as_int = [&](int lo, int hi, int def) {
+        try {
+            return std::clamp(std::stoi(value), lo, hi);
+        } catch (...) {
+            return def;
+        }
+    };
+    if (lower == "hash") u.engine.set_hash(std::size_t(as_int(1, 65536, 16)));
+    else if (lower == "move overhead") u.engine.move_overhead = as_int(0, 5000, 10);
+    else if (lower == "uci_chess960") u.chess960 = value == "true";
+    else if (lower == "threads" || lower == "ponder" || lower == "multipv") {
+        // Accepted; single-threaded search and MultiPV 1 for now.
+    } else std::cout << "info string unknown option " << name << std::endl;
+}
+
 // Returns false when the loop should terminate.
 bool handle_command(UciState& u, const std::string& line) {
     std::istringstream is(line);
@@ -54,32 +105,49 @@ bool handle_command(UciState& u, const std::string& line) {
     if (token == "uci") {
         std::cout << "id name " << ENGINE_NAME << ' ' << ENGINE_VERSION << '\n'
                   << "id author " << ENGINE_AUTHOR << '\n'
+                  << "option name Hash type spin default 16 min 1 max 65536\n"
+                  << "option name Threads type spin default 1 min 1 max 1\n"
+                  << "option name Move Overhead type spin default 10 min 0 max 5000\n"
+                  << "option name Ponder type check default false\n"
+                  << "option name MultiPV type spin default 1 min 1 max 1\n"
                   << "option name UCI_Chess960 type check default false\n"
                   << "uciok" << std::endl;
     } else if (token == "isready") {
         std::cout << "readyok" << std::endl;
     } else if (token == "quit") {
+        u.engine.stop();
         return false;
+    } else if (token == "stop") {
+        u.engine.stop();
+    } else if (token == "ponderhit") {
+        u.engine.ponderhit();
     } else if (token == "ucinewgame") {
+        u.engine.stop();
+        u.engine.new_game();
         u.pos.set(Position::START_FEN, u.chess960);
     } else if (token == "setoption") {
-        std::string name, value, t;
-        is >> t;  // "name"
-        while (is >> t && t != "value") name += (name.empty() ? "" : " ") + t;
-        while (is >> t) value += (value.empty() ? "" : " ") + t;
-        if (name == "UCI_Chess960") u.chess960 = value == "true";
+        u.engine.stop();
+        cmd_setoption(u, is);
     } else if (token == "position") {
+        u.engine.stop();
         cmd_position(u, is);
+    } else if (token == "go") {
+        u.engine.stop();
+        u.engine.go(u.pos, parse_go(is));
     } else if (token == "d") {
         std::cout << u.pos.pretty() << std::flush;
+    } else if (token == "eval") {
+        std::cout << "eval (side to move): " << evaluate(u.pos) << " cp" << std::endl;
     } else if (token == "perft" || token == "divide") {
         int depth = 1;
         is >> depth;
         Position copy = u.pos;
         divide(copy, depth, std::cout, token == "divide");
     } else if (token == "bench") {
-        // No search yet: report an empty bench so tooling has something to parse.
-        std::cout << "0 nodes 0 nps" << std::endl;
+        int depth = 0;
+        is >> depth;
+        u.engine.stop();
+        run_bench(u.engine, depth);
     } else {
         std::cout << "info string unknown command: " << token << std::endl;
     }
@@ -91,7 +159,7 @@ bool handle_command(UciState& u, const std::string& line) {
 int uci_main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);
     init_all();
-    UciState u;
+    auto u = std::make_unique<UciState>();
 
     if (argc > 1) {
         std::string cmd;
@@ -99,14 +167,16 @@ int uci_main(int argc, char** argv) {
             if (i > 1) cmd += ' ';
             cmd += argv[i];
         }
-        handle_command(u, cmd);
+        handle_command(*u, cmd);
+        u->engine.wait();
         return 0;
     }
 
     std::string line;
     while (std::getline(std::cin, line)) {
-        if (!handle_command(u, line)) break;
+        if (!handle_command(*u, line)) break;
     }
+    u->engine.stop();
     return 0;
 }
 
