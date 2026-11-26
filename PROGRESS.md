@@ -8,8 +8,8 @@ project stands.
 
 | | |
 |---|---|
-| Best verified build | 609cdac (M2: baseline search + Texel gen-1 HCE) |
-| Bench | 46615524 (depth 6) |
+| Best verified build | e7fc6eb (M2 + TT-move ordering) |
+| Bench | 15831286 (depth 6) |
 | Latest gauntlet Elo | **2045 ± 26** CCRL Blitz (M4, 10+0.1, vs Stash 11–17; sleep forfeits excluded; 2016 ± 24 raw) — see docs/gauntlets.md |
 | Default net | — |
 
@@ -30,6 +30,7 @@ Every strength-affecting change, pass or fail.
 | Date | Commit | Change | SPRT result | Gauntlet Elo |
 |---|---|---|---|---|
 | 2026-11-26 | 266a219 (merged as 609cdac) | eval: Texel-tuned HCE weights (gen 1), 4.0M self-play positions | STC 8+0.08 [0, 5]: Elo +95.3 ± 23.6, LLR 2.96, 762 games, ptnml [33, 35, 127, 67, 119] — **PASSED**. 24 games forfeited when the Mac slept on battery (lid closed); excluding those pairs: +97.9 ± 24.1 over 736 games | 2045 ± 26 |
+| 2026-11-26 | e7fc6eb | search: try the TT move first | STC 8+0.08 [0, 5]: Elo +147.2 ± 28.2, LLR 2.97, 520 games, ptnml [11, 18, 74, 66, 91] — **PASSED**. 8 games lost to a clamshell sleep; excluding those pairs: +154.7 ± 28.1 over 512 games | |
 
 ## Notes and measurements
 
@@ -64,6 +65,5 @@ Every strength-affecting change, pass or fail.
 
 ## Next steps
 
-1. M4, in the brief's order, one branch + one SPRT each: TT-move ordering (prepared on `feat/tt-move-ordering`),
-   then SEE (draft written), killers, counter-moves, history, null move, LMR, RFP, ...
+1. M4, in the brief's order, one branch + one SPRT each: ~~TT-move ordering~~ (+147), SEE (next, on `feat/see`), killers, counter-moves, history, null move, LMR, RFP, ...
 2. Long runs need AC power and the lid open: on battery macOS sleeps on lid close and forfeits every running game.
