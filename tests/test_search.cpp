@@ -107,3 +107,16 @@ TEST_CASE("search wins hanging material and respects node limits") {
     CHECK(r.best);
     CHECK(r.nodes < 30000);
 }
+
+TEST_CASE("deep iterative deepening on a search thread does not overflow the stack") {
+    // Regression: in this mate-in-1 position iterative deepening reaches
+    // depth ~228 within milliseconds; with the default 512 KB macOS thread
+    // stack the engine crashed (SIGBUS) during the sanity match.
+    Engine engine;
+    Position pos("5Q2/1Q6/8/1k1N4/8/7P/7K/1q1R4 b - - 1 65");
+    SearchLimits limits;
+    limits.depth = MAX_PLY - 1;
+    engine.go(pos, limits);
+    engine.wait();
+    CHECK_FALSE(engine.searching());
+}

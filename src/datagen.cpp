@@ -12,6 +12,7 @@
 
 #include "movegen.h"
 #include "search.h"
+#include "threads.h"
 
 namespace endgame {
 
@@ -134,8 +135,8 @@ void run_datagen(const DatagenOptions& opts) {
     g_positions = 0;
     g_games = 0;
     const auto start = std::chrono::steady_clock::now();
-    std::vector<std::thread> threads;
-    for (int i = 0; i < opts.threads; ++i) threads.emplace_back(worker, std::cref(opts), i);
+    std::vector<NativeThread> threads;
+    for (int i = 0; i < opts.threads; ++i) threads.emplace_back([&opts, i]() { worker(opts, i); });
 
     std::atomic<bool> done{false};
     std::thread progress([&]() {

@@ -11,6 +11,7 @@
 
 #include "movegen.h"
 #include "position.h"
+#include "threads.h"
 #include "timeman.h"
 #include "tt.h"
 
@@ -90,7 +91,7 @@ public:
 
 private:
     TranspositionTable tt_;
-    std::thread thread_;
+    NativeThread thread_;
     std::atomic<bool> searching_{false};
     std::mutex mutex_;
 };

@@ -297,7 +297,7 @@ void Engine::go(const Position& pos, const SearchLimits& limits) {
     stop_requested = false;
     pondering = limits.ponder;
     searching_ = true;
-    thread_ = std::thread([this, pos, limits]() {
+    thread_ = NativeThread([this, pos, limits]() {
         auto worker = std::make_unique<Worker>(*this);
         SearchResult r = worker->run(pos, limits, true);
         // UCI: never send bestmove while pondering or in infinite mode until
