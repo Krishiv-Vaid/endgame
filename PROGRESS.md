@@ -8,17 +8,17 @@ project stands.
 
 | | |
 |---|---|
-| Best verified build | — |
-| Bench | 0 (no search yet) |
-| Latest gauntlet Elo | — |
+| Best verified build | 609cdac (M2: baseline search + Texel gen-1 HCE) |
+| Bench | 46615524 (depth 6) |
+| Latest gauntlet Elo | **2045 ± 26** CCRL Blitz (M4, 10+0.1, vs Stash 11–17; sleep forfeits excluded; 2016 ± 24 raw) — see docs/gauntlets.md |
 | Default net | — |
 
 ## Milestones
 
 - [x] **M0 — Scaffolding**: CMake, UCI stub, doctest, CI (macOS arm64, Linux GCC/Clang AVX2, Windows Clang) — done 2026-11-25, CI green on all 7 jobs
 - [x] **M1 — Board & move generation**: FEN, make/unmake, magics, legal movegen, perft suite, fuzz test → tag `v0.1-movegen` — done 2026-11-25
-- [ ] **M2 — Baseline search + HCE**: alpha-beta/PVS/qsearch/TT, time management, HCE, Texel tuner, 1000 clean games → tag `v0.2-search`
-- [ ] **M3 — Testing infrastructure**: `tools/sprt.sh`, `tools/gauntlet.sh`, `tools/bench_compare.sh`
+- [x] **M2 — Baseline search + HCE**: alpha-beta/PVS/qsearch/TT, time management, HCE, Texel tuner, 1000 clean games → tag `v0.2-search` — done 2026-11-26, gauntlet 2045 ± 26
+- [x] **M3 — Testing infrastructure**: `tools/sprt.sh`, `tools/gauntlet.sh`, `tools/bench_compare.sh` — done 2026-11-26 (first full SPRT run end to end with sprt.sh)
 - [ ] **M4 — Search improvements** (one SPRT per feature) → tag `v0.3-hce`
 - [ ] **M5 — NNUE + self-play loop** → tag `v1.0-nnue`
 - [ ] **M6 — Polish to 3200+** → release `v2.0`
@@ -29,7 +29,7 @@ Every strength-affecting change, pass or fail.
 
 | Date | Commit | Change | SPRT result | Gauntlet Elo |
 |---|---|---|---|---|
-| 2026-11-26 | 266a219 | eval: Texel-tuned HCE weights (gen 1), 4.0M self-play positions | STC 8+0.08 [0, 5]: Elo +95.3 ± 23.6, LLR 2.96, 762 games, ptnml [33, 35, 127, 67, 119] — **PASSED**. 24 games forfeited when the Mac slept on battery (lid closed); excluding those pairs: +97.9 ± 24.1 over 736 games | |
+| 2026-11-26 | 266a219 (merged as 609cdac) | eval: Texel-tuned HCE weights (gen 1), 4.0M self-play positions | STC 8+0.08 [0, 5]: Elo +95.3 ± 23.6, LLR 2.96, 762 games, ptnml [33, 35, 127, 67, 119] — **PASSED**. 24 games forfeited when the Mac slept on battery (lid closed); excluding those pairs: +97.9 ± 24.1 over 736 games | 2045 ± 26 |
 
 ## Notes and measurements
 
@@ -64,5 +64,6 @@ Every strength-affecting change, pass or fail.
 
 ## Next steps
 
-1. M2: baseline search (alpha-beta, PVS, qsearch, TT, MVV-LVA), time management, HCE, bench.
-2. Build fastchess; 1000-game self-play sanity run; Texel tuner on self-play positions.
+1. M4, in the brief's order, one branch + one SPRT each: TT-move ordering (prepared on `feat/tt-move-ordering`),
+   then SEE (draft written), killers, counter-moves, history, null move, LMR, RFP, ...
+2. Long runs need AC power and the lid open: on battery macOS sleeps on lid close and forfeits every running game.
