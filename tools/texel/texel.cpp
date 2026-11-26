@@ -161,6 +161,8 @@ int main(int argc, char** argv) {
     int epochs = 2000;
     double lr = 1.0, lambda = 1.0;
     std::size_t max_positions = SIZE_MAX;
+    long min_count = 1000;
+    double reg = 0.0;  // L2 pull toward the starting weights (per weight, per epoch gradient)  // params seen in fewer positions keep their start value
     std::string out_path = "src/hce_params.inc";
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -171,6 +173,8 @@ int main(int argc, char** argv) {
         else if (a == "--out") out_path = next();
         else if (a == "--threads") g_threads = std::max(1, std::stoi(next()));
         else if (a == "--max") max_positions = std::stoull(next());
+        else if (a == "--min-count") min_count = std::stol(next());
+        else if (a == "--reg") reg = std::stod(next());
         else files.push_back(a);
     }
     if (files.empty()) {
@@ -190,6 +194,26 @@ int main(int argc, char** argv) {
     w.eg.resize(hce::PARAM_COUNT);
     for (int i = 0; i < hce::PARAM_COUNT; ++i) w.mg[i] = hce::params[i].mg, w.eg[i] = hce::params[i].eg;
 
+    // Parameters that almost never occur get no reliable gradient and drift to
+    // extreme values; freeze them at their starting values.
+    // Phase-weighted occurrence counts: the mg half of a feature that only
+    // appears in endgames (and vice versa) gets almost no gradient and drifts.
+    std::vector<double> seen_mg(hce::PARAM_COUNT, 0), seen_eg(hce::PARAM_COUNT, 0);
+    for (const Sample& smp : ds.samples)
+        for (std::uint32_t j = smp.begin; j < smp.end; ++j) {
+            seen_mg[ds.features[j].index] += smp.phase_mg;
+            seen_eg[ds.features[j].index] += 1 - smp.phase_mg;
+        }
+    std::vector<bool> frozen(2 * hce::PARAM_COUNT);
+    int n_frozen = 0;
+    for (int i = 0; i < hce::PARAM_COUNT; ++i) {
+        n_frozen += (frozen[i] = seen_mg[i] < min_count);
+        n_frozen += (frozen[hce::PARAM_COUNT + i] = seen_eg[i] < min_count);
+    }
+    std::printf("%d of %d mg/eg weights frozen (phase-weighted count < %ld)\n", n_frozen,
+                2 * hce::PARAM_COUNT, min_count);
+
+    const Weights start = w;
     const double k = fit_k(ds, w, lambda);
     std::printf("K = %.6f, initial loss %.6f\n", k, loss(ds, w, k, lambda));
 
@@ -218,10 +242,13 @@ int main(int argc, char** argv) {
             double g = 0;
             for (auto& tg : grads) g += tg[i];
             g *= scale;
+            // Ridge term: separates collinear mg/eg pairs (features that only
+            // occur in a narrow phase band) without moving well-determined ones.
+            g += 2 * reg * (i < n ? w.mg[i] - start.mg[i] : w.eg[i - n] - start.eg[i - n]);
             m1[i] = b1 * m1[i] + (1 - b1) * g;
             m2[i] = b2 * m2[i] + (1 - b2) * g * g;
             double mh = m1[i] / (1 - std::pow(b1, epoch)), vh = m2[i] / (1 - std::pow(b2, epoch));
-            double step = lr * mh / (std::sqrt(vh) + eps);
+            double step = frozen[i] ? 0.0 : lr * mh / (std::sqrt(vh) + eps);
             if (i < n) w.mg[i] -= step;
             else w.eg[i - n] -= step;
         }
