@@ -518,6 +518,61 @@ bool Position::is_pseudo_legal(Move m) const {
 }
 
 // ---------------------------------------------------------------------------
+// Static exchange evaluation
+// ---------------------------------------------------------------------------
+constexpr int SEE_VALUE[7] = {100, 300, 300, 500, 900, 0, 0};
+
+bool Position::see_ge(Move m, int threshold) const {
+    if (m.is_castle() || m.is_promotion() || m.is_en_passant()) return 0 >= threshold;
+
+    const Square from = m.from(), to = m.to();
+    int swap = SEE_VALUE[board_[to] == NO_PIECE ? NO_PIECE_TYPE : type_of(board_[to])] - threshold;
+    if (swap < 0) return false;
+    swap = SEE_VALUE[type_of(board_[from])] - swap;
+    if (swap <= 0) return true;
+
+    Bitboard occ = pieces() ^ square_bb(from) ^ square_bb(to);
+    Color stm = stm_;
+    Bitboard attackers = attackers_to(to, occ);
+    const Bitboard bq = pieces(BISHOP, QUEEN), rq = pieces(ROOK, QUEEN);
+    int res = 1;
+
+    while (true) {
+        stm = ~stm;
+        attackers &= occ;
+        Bitboard mine = attackers & pieces(stm);
+        if (!mine) break;
+        res ^= 1;
+
+        Bitboard b;
+        if ((b = mine & pieces(stm, PAWN))) {
+            if ((swap = SEE_VALUE[PAWN] - swap) < res) break;
+            occ ^= square_bb(lsb(b));
+            attackers |= bishop_attacks(to, occ) & bq;
+        } else if ((b = mine & pieces(stm, KNIGHT))) {
+            if ((swap = SEE_VALUE[KNIGHT] - swap) < res) break;
+            occ ^= square_bb(lsb(b));
+        } else if ((b = mine & pieces(stm, BISHOP))) {
+            if ((swap = SEE_VALUE[BISHOP] - swap) < res) break;
+            occ ^= square_bb(lsb(b));
+            attackers |= bishop_attacks(to, occ) & bq;
+        } else if ((b = mine & pieces(stm, ROOK))) {
+            if ((swap = SEE_VALUE[ROOK] - swap) < res) break;
+            occ ^= square_bb(lsb(b));
+            attackers |= rook_attacks(to, occ) & rq;
+        } else if ((b = mine & pieces(stm, QUEEN))) {
+            if ((swap = SEE_VALUE[QUEEN] - swap) < res) break;
+            occ ^= square_bb(lsb(b));
+            attackers |= (bishop_attacks(to, occ) & bq) | (rook_attacks(to, occ) & rq);
+        } else {
+            // King: can only capture if the opponent has no attackers left.
+            return (attackers & ~pieces(stm)) ? res ^ 1 : res;
+        }
+    }
+    return bool(res);
+}
+
+// ---------------------------------------------------------------------------
 // Draw detection
 // ---------------------------------------------------------------------------
 bool Position::is_repetition(int ply) const {

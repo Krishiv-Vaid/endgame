@@ -184,3 +184,29 @@ TEST_CASE("UCI move notation") {
     CHECK(f.chess960());
     CHECK(f.fen() == "bqnb1rkr/pp3ppp/3ppn2/2p5/5P2/P2P4/NPP1P1PP/BQ1BNRKR w HFhf - 2 9");
 }
+
+TEST_CASE("static exchange evaluation") {
+    // Rook takes an undefended pawn: +100.
+    Position a("4k3/8/8/3p4/8/8/8/3RK3 w - - 0 1");
+    Move rxd5 = a.uci_to_move("d1d5");
+    CHECK(a.see_ge(rxd5, 100));
+    CHECK_FALSE(a.see_ge(rxd5, 101));
+
+    // Rook takes a pawn defended by a pawn: 100 - 500 = -400.
+    Position b("4k3/8/2p5/3p4/8/8/8/3RK3 w - - 0 1");
+    Move rxd5b = b.uci_to_move("d1d5");
+    CHECK(b.see_ge(rxd5b, -400));
+    CHECK_FALSE(b.see_ge(rxd5b, 0));
+
+    // Nxd5 exd5 Rxd5: +300 - 300 + 100 = +100 for White.
+    Position c("4k3/8/4p3/3n4/8/2N5/8/3RK3 w - - 0 1");
+    Move nxd5 = c.uci_to_move("c3d5");
+    CHECK(c.see_ge(nxd5, 100));
+    CHECK_FALSE(c.see_ge(nxd5, 101));
+
+    // Quiet move into an attacked square loses the piece.
+    Position d("4k3/8/8/8/2p5/8/8/3QK3 w - - 0 1");
+    Move qd3 = d.uci_to_move("d1d3");
+    CHECK_FALSE(d.see_ge(qd3, 0));
+    CHECK(d.see_ge(d.uci_to_move("d1d2"), 0));
+}

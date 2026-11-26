@@ -27,7 +27,9 @@ struct ScoredMoves {
             if (m.is_capture()) {
                 PieceType victim = m.is_en_passant() ? PAWN : type_of(pos.piece_on(m.to()));
                 PieceType attacker = type_of(pos.piece_on(m.from()));
-                s = 1000 + MVV_LVA_VALUE[victim] * 16 - MVV_LVA_VALUE[attacker];
+                s = MVV_LVA_VALUE[victim] * 16 - MVV_LVA_VALUE[attacker];
+                // Losing captures (SEE < 0) go after all quiet moves.
+                s += pos.see_ge(m, 0) ? 1000 : -1000;
             }
             if (m.is_promotion()) s += m.promotion_type() == QUEEN ? 1000 + 9 * 16 : -2000;
             if (m == tt_move) s = 1'000'000;  // TT move first
@@ -179,6 +181,12 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
     int move_count = 0;
 
     while (Move m = picker.pick()) {
+        // SEE pruning at shallow depth: skip moves that lose too much material
+        // once we already have a non-losing line.
+        if (!root && !in_check && best_score > VALUE_MATED_IN_MAX_PLY && depth <= 6 &&
+            !pos_.see_ge(m, m.is_capture() ? -100 * depth : -50 * depth))
+            continue;
+
         ++move_count;
         stack_[ply].move = m;
         engine_.tt().prefetch(pos_.key_after(m));
@@ -255,6 +263,8 @@ int Worker::qsearch(int alpha, int beta, int ply) {
             PieceType victim = m.is_en_passant() ? PAWN : type_of(pos_.piece_on(m.to()));
             if (static_eval + DELTA_VALUE[victim] + 200 <= alpha) continue;
         }
+        // SEE pruning: captures that lose material can't help a quiet position.
+        if (!in_check && !pos_.see_ge(m, 0)) continue;
         pos_.make_move(m);
         const int score = -qsearch<NT>(-beta, -alpha, ply + 1);
         pos_.unmake_move();

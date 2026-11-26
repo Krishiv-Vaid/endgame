@@ -103,6 +103,9 @@ public:
 
     bool is_pseudo_legal(Move m) const;  // full check against the legal move list
     bool gives_check(Move m) const;
+    // Static exchange evaluation: does m win at least `threshold` centipawns
+    // once all captures on its target square are played out?
+    bool see_ge(Move m, int threshold) const;
 
     // Draw by 50-move rule or repetition (any earlier repetition since the
     // last irreversible move counts once `ply` > 0 into the search; at the
