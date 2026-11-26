@@ -53,6 +53,7 @@ void cmd_position(UciState& u, std::istringstream& is) {
 
 SearchLimits parse_go(std::istringstream& is) {
     SearchLimits l;
+    l.start_time = now_ms();  // clock starts when the command arrives
     std::string token;
     auto read = [&is](auto& v) {
         long long x = 0;

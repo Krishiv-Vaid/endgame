@@ -25,6 +25,7 @@ struct SearchLimits {
     std::uint64_t soft_nodes = 0;  // no new iteration after this many nodes
     bool infinite = false;
     bool ponder = false;
+    TimePoint start_time = 0;  // when "go" arrived; 0 = when the search starts
 
     bool use_time() const { return time[WHITE] || time[BLACK] || movetime; }
 };

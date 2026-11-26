@@ -93,7 +93,7 @@ void Worker::print_info(int depth, int score, TimePoint elapsed) const {
 }
 
 SearchResult Worker::run(const Position& root, const SearchLimits& limits, bool print) {
-    const TimePoint start = now_ms();
+    const TimePoint start = limits.start_time ? limits.start_time : now_ms();
     pos_ = root;
     limits_ = limits;
     tm_.init(limits, root.side_to_move(), start, engine_.move_overhead);
