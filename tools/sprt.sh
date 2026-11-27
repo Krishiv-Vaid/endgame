@@ -5,6 +5,8 @@
 # STC 8+0.08, LTC 40+0.4; 1 thread, Hash 16, UHO_Lichess_4852_v1 openings.
 # Prints the result and appends a row to PROGRESS.md's Elo log.
 # Env: CONCURRENCY (default 8), BOOK, FASTCHESS, NO_LOG=1 to skip PROGRESS.md,
+#      DEV_OPTS / BASE_OPTS (extra fastchess engine args, e.g. "option.EvalFile=/abs/net.nnue"),
+#      TAG (suffix for result file names, to tell apart runs of the same two commits),
 #      MAX_ROUNDS (default 10000 = 20,000 games; hitting it = inconclusive, treated as a fail).
 set -euo pipefail
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -37,12 +39,12 @@ base_sha=$(git rev-parse --short=7 "$base^{commit}")
 for b in "$dev_bin" "$base_bin"; do echo "$b: $("$b" bench | tail -1)"; done
 
 mkdir -p tools/results
-tag="sprt-$dev_sha-vs-$base_sha-$tc_name"
+tag="sprt-$dev_sha-vs-$base_sha-$tc_name${TAG:+-$TAG}"
 out="tools/results/$tag.out"
 echo "SPRT $dev_sha vs $base_sha ($kind, $tc_name $tc, concurrency $concurrency) -> $out"
 caffeinate -dimsu "$fastchess" \
-  -engine cmd="$dev_bin" name="dev-$dev_sha" \
-  -engine cmd="$base_bin" name="base-$base_sha" \
+  -engine cmd="$dev_bin" name="dev-$dev_sha" ${DEV_OPTS:-} \
+  -engine cmd="$base_bin" name="base-$base_sha" ${BASE_OPTS:-} \
   -each tc="$tc" option.Hash=16 option.Threads=1 \
   -openings file="$book" format=epd order=random \
   -games 2 -rounds "${MAX_ROUNDS:-10000}" -repeat -recover \
