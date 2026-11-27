@@ -22,7 +22,7 @@ struct ScoredMoves {
     int next = 0;
 
     ScoredMoves(const Position& pos, const MoveList& list, Move tt_move = Move::none(),
-                const Move* killers = nullptr) {
+                const Move* killers = nullptr, Move counter = Move::none()) {
         for (Move m : list) {
             int s = 0;
             if (m.is_capture()) {
@@ -37,6 +37,7 @@ struct ScoredMoves {
             if (killers && !m.is_noisy()) {
                 if (m == killers[0]) s = 900;
                 else if (m == killers[1]) s = 800;
+                else if (m == counter) s = 700;
             }
             if (m == tt_move) s = 1'000'000;  // TT move first
             moves[count] = m;
@@ -180,7 +181,18 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
     MoveList list;
     generate<GEN_ALL>(pos_, list);
     if (!list.size()) return in_check ? mated_in(ply) : 0;
-    ScoredMoves picker(pos_, list, tte.move, stack_[ply].killers);
+    // Counter-move for the opponent's last move (none at the root or after a
+    // null move). Castling is keyed by the king on its destination square.
+    const Move prev = pos_.last_move();
+    Piece prev_piece = NO_PIECE;
+    if (prev && prev != Move::null()) {
+        Square landed = prev.to();
+        if (prev.is_castle())
+            landed = relative_square(~pos_.side_to_move(), prev.to() > prev.from() ? SQ_G1 : SQ_C1);
+        prev_piece = pos_.piece_on(landed);
+    }
+    const Move counter = prev_piece != NO_PIECE ? counter_[prev_piece][prev.to()] : Move::none();
+    ScoredMoves picker(pos_, list, tte.move, stack_[ply].killers, counter);
 
     int best_score = -VALUE_INF;
     Move best_move = Move::none();
@@ -215,9 +227,12 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
                 best_move = m;
                 if (pv_node) update_pv(ply, m);
                 if (score >= beta) {
-                    if (!m.is_noisy() && m != stack_[ply].killers[0]) {
-                        stack_[ply].killers[1] = stack_[ply].killers[0];
-                        stack_[ply].killers[0] = m;
+                    if (!m.is_noisy()) {
+                        if (m != stack_[ply].killers[0]) {
+                            stack_[ply].killers[1] = stack_[ply].killers[0];
+                            stack_[ply].killers[0] = m;
+                        }
+                        if (prev_piece != NO_PIECE) counter_[prev_piece][prev.to()] = m;
                     }
                     break;
                 }

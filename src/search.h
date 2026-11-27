@@ -62,6 +62,8 @@ private:
     int root_depth_ = 0;
 
     StackEntry stack_[MAX_PLY + 8];
+    // counter_[piece][to] of the previous move -> quiet move that refuted it.
+    Move counter_[PIECE_NB][SQUARE_NB] = {};
     Move pv_[MAX_PLY + 2][MAX_PLY + 2];
     int pv_len_[MAX_PLY + 2] = {};
 };
