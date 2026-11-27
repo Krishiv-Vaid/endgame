@@ -6,7 +6,7 @@
 namespace endgame {
 
 inline constexpr const char* ENGINE_NAME = "endgame";
-inline constexpr const char* ENGINE_VERSION = "0.0.1-dev";
+inline constexpr const char* ENGINE_VERSION = "1.0";
 inline constexpr const char* ENGINE_AUTHOR = "Krishiv Vaid";
 
 // Runs the UCI command loop until "quit" or EOF. If argc > 1 the command-line
