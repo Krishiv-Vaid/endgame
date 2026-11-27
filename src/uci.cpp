@@ -7,6 +7,7 @@
 
 #include "bench.h"
 #include "datagen.h"
+#include "packed.h"
 #include "eval_hce.h"
 #include "init.h"
 #include "perft.h"
@@ -157,9 +158,29 @@ bool handle_command(UciState& u, const std::string& line) {
             else if (key == "hardnodes") is >> o.hard_nodes;
             else if (key == "plies") is >> o.random_plies;
             else if (key == "seed") is >> o.seed;
+            else if (key == "format") {
+                std::string f;
+                is >> f;
+                o.binary = f != "txt";
+            }
         }
         u.engine.stop();
         run_datagen(o);
+    } else if (token == "shardinfo") {
+        // shardinfo <file>...: verify shards and report record counts.
+        std::string path;
+        std::uint64_t total = 0;
+        while (is >> path) {
+            std::vector<PackedPosition> recs;
+            std::string err;
+            if (read_shard(path, recs, &err)) {
+                std::cout << path << ": " << recs.size() << " positions, checksum ok" << std::endl;
+                total += recs.size();
+            } else {
+                std::cout << path << ": INVALID (" << err << ")" << std::endl;
+            }
+        }
+        std::cout << "total " << total << " positions" << std::endl;
     } else if (token == "bench") {
         int depth = 0;
         is >> depth;

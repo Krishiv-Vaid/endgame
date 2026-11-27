@@ -12,13 +12,16 @@ struct DatagenOptions {
     std::uint64_t hard_nodes = 20000;
     int random_plies = 8;                  // 8 or 9 (chosen per game)
     std::uint64_t seed = 1;
-    std::string output = "data/selfplay";  // writes <output>_t<i>.txt
+    std::string output = "data/selfplay";  // writes <output>_t<i>_<run>.bin (or _t<i>.txt)
+    bool binary = true;                    // PackedPosition shards; false = Texel text
 };
 
 // Self-play data generation: the engine plays itself at fixed nodes and
-// writes "<fen> | <white-view score> | <white result 1.0/0.5/0.0>" for every
-// quiet position (not in check, best move not a capture or promotion).
-// Appends, so an interrupted run resumes by simply running again.
+// records every quiet position (not in check, best move not a capture or
+// promotion) with its white-view search score and the game result.
+// Binary mode writes one PackedPosition shard per thread per run (a new run
+// never overwrites old shards, so an interrupted run resumes by running
+// again); text mode appends "<fen> | <score> | <result>" lines for Texel.
 void run_datagen(const DatagenOptions& opts);
 
 }  // namespace endgame

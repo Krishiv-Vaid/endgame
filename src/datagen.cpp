@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "movegen.h"
+#include "packed.h"
 #include "search.h"
 #include "threads.h"
 
@@ -29,8 +30,9 @@ struct Rng {
 };
 
 struct Record {
-    std::string fen;
-    int score;  // white's view
+    PackedPosition packed;  // result filled in when the game ends
+    std::string fen;        // text mode only
+    int score;              // white's view
 };
 
 constexpr int WIN_ADJ_SCORE = 2500, WIN_ADJ_PLIES = 4;
@@ -63,7 +65,18 @@ bool random_opening(Position& pos, Engine& engine, Rng& rng, int plies) {
 void worker(const DatagenOptions& opts, int id) {
     Rng rng{opts.seed * 0x1000193ULL + std::uint64_t(id) * 0x9E3779B9ULL};
     auto engine = std::make_unique<Engine>();
-    std::ofstream out(opts.output + "_t" + std::to_string(id) + ".txt", std::ios::app);
+    std::unique_ptr<ShardWriter> shard;
+    std::ofstream text;
+    if (opts.binary) {
+        shard = std::make_unique<ShardWriter>(opts.output + "_t" + std::to_string(id) + "_" +
+                                              std::to_string(opts.seed) + ".bin");
+        if (!shard->ok()) {
+            std::cerr << "datagen: cannot open output for thread " << id << std::endl;
+            return;
+        }
+    } else {
+        text.open(opts.output + "_t" + std::to_string(id) + ".txt", std::ios::app);
+    }
     const std::uint64_t per_thread_target = opts.positions;
 
     while (g_positions.load() < per_thread_target) {
@@ -96,7 +109,8 @@ void worker(const DatagenOptions& opts, int id) {
             const int white_score = pos.side_to_move() == WHITE ? r.score : -r.score;
 
             if (!pos.in_check() && !r.best.is_noisy() && !is_mate_score(r.score))
-                records.push_back({pos.fen(), white_score});
+                records.push_back({PackedPosition::pack(pos, white_score, 1),
+                                   opts.binary ? std::string() : pos.fen(), white_score});
 
             // Adjudication.
             win_streak = std::abs(white_score) > WIN_ADJ_SCORE ? win_streak + 1 : 0;
@@ -116,11 +130,23 @@ void worker(const DatagenOptions& opts, int id) {
         }
         if (result < 0) continue;
 
-        std::ostringstream buf;
-        for (const Record& rec : records)
-            buf << rec.fen << " | " << rec.score << " | " << (result == 1.0 ? "1.0" : result == 0.0 ? "0.0" : "0.5") << '\n';
-        out << buf.str();
-        out.flush();
+        if (opts.binary) {
+            std::vector<PackedPosition> batch;
+            batch.reserve(records.size());
+            const std::uint8_t res = result == 1.0 ? 2 : result == 0.0 ? 0 : 1;
+            for (Record& rec : records) {
+                rec.packed.result = res;
+                batch.push_back(rec.packed);
+            }
+            shard->write(batch.data(), batch.size());
+        } else {
+            std::ostringstream buf;
+            for (const Record& rec : records)
+                buf << rec.fen << " | " << rec.score << " | "
+                    << (result == 1.0 ? "1.0" : result == 0.0 ? "0.0" : "0.5") << '\n';
+            text << buf.str();
+            text.flush();
+        }
         g_positions += records.size();
         g_games += 1;
     }
@@ -130,7 +156,8 @@ void worker(const DatagenOptions& opts, int id) {
 
 void run_datagen(const DatagenOptions& opts) {
     std::cout << "datagen: " << opts.threads << " threads, " << opts.positions << " positions, nodes "
-              << opts.soft_nodes << "/" << opts.hard_nodes << ", output " << opts.output << "_t*.txt"
+              << opts.soft_nodes << "/" << opts.hard_nodes << ", output " << opts.output
+              << (opts.binary ? "_t*_" + std::to_string(opts.seed) + ".bin" : std::string("_t*.txt"))
               << std::endl;
     g_positions = 0;
     g_games = 0;
