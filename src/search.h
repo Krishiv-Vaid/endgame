@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "movegen.h"
+#include "nnue/network.h"
 #include "position.h"
 #include "threads.h"
 #include "timeman.h"
@@ -47,6 +48,13 @@ private:
     template <NodeType NT>
     int qsearch(int alpha, int beta, int ply);
 
+    // Static evaluation at `ply` (NNUE when a network is loaded, else HCE).
+    int eval(int ply);
+    void make(Move m, int ply) {
+        acc_ok_[ply + 1] = false;
+        pos_.make_move(m);
+    }
+
     void check_time();
     void update_pv(int ply, Move m);
     void print_info(int depth, int score, TimePoint elapsed) const;
@@ -62,6 +70,11 @@ private:
     int root_depth_ = 0;
 
     StackEntry stack_[MAX_PLY + 8];
+    // NNUE accumulators per ply, brought up to date lazily from the nearest
+    // computed ancestor when a position is evaluated.
+    nnue::Accumulator acc_[MAX_PLY + 8];
+    bool acc_ok_[MAX_PLY + 8] = {};
+    const nnue::Network* net_ = nullptr;
     Move pv_[MAX_PLY + 2][MAX_PLY + 2];
     int pv_len_[MAX_PLY + 2] = {};
 };

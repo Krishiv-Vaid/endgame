@@ -16,6 +16,14 @@ extern Key side;
 void init();
 }  // namespace zobrist
 
+// A piece that appeared, disappeared or moved in the last move (for NNUE
+// incremental updates). from == SQ_NONE: added; to == SQ_NONE: removed.
+struct DirtyPiece {
+    Piece piece;
+    Square from;
+    Square to;
+};
+
 // Everything that make_move() changes and unmake_move() must restore, plus
 // derived data (checkers, pins) computed once per position.
 struct StateInfo {
@@ -33,6 +41,11 @@ struct StateInfo {
     // blockers[c]: pieces of either colour that shield c's king from an enemy
     // slider. Our own blockers are pinned.
     Bitboard blockers[COLOR_NB];
+
+    // Piece changes made by `move` (at most 3: promotion with capture or
+    // castling uses 2-3). Zero for the root and null moves.
+    DirtyPiece dirty[3];
+    int dirty_count;
 };
 
 class Position {
@@ -80,6 +93,9 @@ public:
     Bitboard blockers(Color c) const { return st().blockers[c]; }
     Bitboard pinned() const { return st().blockers[stm_] & pieces(stm_); }
     Piece captured_piece() const { return st().captured; }
+    // State k plies back from the current one (0 = current). k must be less
+    // than the number of positions since set().
+    const StateInfo& state_back(int k) const { return states_[states_.size() - 1 - std::size_t(k)]; }
     Move last_move() const { return st().move; }
 
     Bitboard attackers_to(Square s, Bitboard occ) const;

@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstring>
 #include <cstdlib>
 #include <fstream>
 #include <string>
@@ -209,4 +210,45 @@ TEST_CASE("static exchange evaluation") {
     Move qd3 = d.uci_to_move("d1d3");
     CHECK_FALSE(d.see_ge(qd3, 0));
     CHECK(d.see_ge(d.uci_to_move("d1d2"), 0));
+}
+
+#include "packed.h"
+
+TEST_CASE("PackedPosition round-trips and shards verify") {
+    std::vector<PackedPosition> recs;
+    std::vector<std::string> fens;
+    int i = 0;
+    for (const auto& fen : suite_fens("standard.epd")) {
+        Position pos(fen);
+        PackedPosition p = PackedPosition::pack(pos, 100 - i, i % 3);
+        // Everything but the full-move number (not stored) must survive.
+        auto strip = [](const std::string& f) { return f.substr(0, f.rfind(' ')); };
+        Position back(p.to_fen());
+        CHECK(strip(back.fen()) == strip(pos.fen()));
+        CHECK(p.score == 100 - i);
+        CHECK(p.result == i % 3);
+        recs.push_back(p);
+        ++i;
+    }
+    const std::string path = std::string(ENDGAME_TEST_DATA_DIR) + "/../build_test_shard.bin";
+    {
+        ShardWriter w(path);
+        REQUIRE(w.ok());
+        w.write(recs.data(), 50);
+        w.write(recs.data() + 50, recs.size() - 50);
+    }
+    std::vector<PackedPosition> back;
+    std::string err;
+    REQUIRE(read_shard(path, back, &err));
+    CHECK(back.size() == recs.size());
+    CHECK(std::memcmp(back.data(), recs.data(), recs.size() * sizeof(PackedPosition)) == 0);
+
+    // Corrupt one byte: the checksum must catch it.
+    std::FILE* f = std::fopen(path.c_str(), "r+b");
+    std::fseek(f, 32 + 40, SEEK_SET);
+    std::fputc(0x5A, f);
+    std::fclose(f);
+    back.clear();
+    CHECK_FALSE(read_shard(path, back, &err));
+    std::remove(path.c_str());
 }

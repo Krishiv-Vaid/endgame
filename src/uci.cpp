@@ -1,14 +1,18 @@
 #include "uci.h"
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 
 #include "bench.h"
 #include "datagen.h"
+#include "packed.h"
 #include "eval_hce.h"
 #include "init.h"
+#include "nnue/network.h"
+#include "nnue/simd.h"
 #include "perft.h"
 #include "position.h"
 #include "search.h"
@@ -93,6 +97,20 @@ void cmd_setoption(UciState& u, std::istringstream& is) {
     if (lower == "hash") u.engine.set_hash(std::size_t(as_int(1, 65536, 16)));
     else if (lower == "move overhead") u.engine.move_overhead = as_int(0, 5000, 10);
     else if (lower == "uci_chess960") u.chess960 = value == "true";
+    else if (lower == "evalfile") {
+        if (value.empty() || value == "<empty>" || value == "hce") {
+            nnue::unload();
+            std::cout << "info string using hand-crafted evaluation" << std::endl;
+        } else {
+            std::string err;
+            if (nnue::load_file(value, &err))
+                std::cout << "info string loaded network " << value << " (hash " << std::hex
+                          << nnue::active_hash() << std::dec << ", " << nnue::simd::name() << ")" << std::endl;
+            else
+                std::cout << "info string could not load " << value << ": " << err << std::endl;
+        }
+        u.engine.new_game();  // TT evals came from the old evaluator
+    }
     else if (lower == "threads" || lower == "ponder" || lower == "multipv") {
         // Accepted; single-threaded search and MultiPV 1 for now.
     } else std::cout << "info string unknown option " << name << std::endl;
@@ -113,6 +131,7 @@ bool handle_command(UciState& u, const std::string& line) {
                   << "option name Ponder type check default false\n"
                   << "option name MultiPV type spin default 1 min 1 max 1\n"
                   << "option name UCI_Chess960 type check default false\n"
+                  << "option name EvalFile type string default <empty>\n"
                   << "uciok" << std::endl;
     } else if (token == "isready") {
         std::cout << "readyok" << std::endl;
@@ -139,7 +158,13 @@ bool handle_command(UciState& u, const std::string& line) {
     } else if (token == "d") {
         std::cout << u.pos.pretty() << std::flush;
     } else if (token == "eval") {
-        std::cout << "eval (side to move): " << evaluate(u.pos) << " cp" << std::endl;
+        std::cout << "hce  (side to move): " << evaluate(u.pos) << " cp" << std::endl;
+        if (const nnue::Network* net = nnue::active()) {
+            nnue::Accumulator acc;
+            nnue::refresh(*net, u.pos, acc);
+            std::cout << "nnue (side to move): " << nnue::output(*net, acc, u.pos.side_to_move())
+                      << " cp" << std::endl;
+        }
     } else if (token == "perft" || token == "divide") {
         int depth = 1;
         is >> depth;
@@ -157,9 +182,53 @@ bool handle_command(UciState& u, const std::string& line) {
             else if (key == "hardnodes") is >> o.hard_nodes;
             else if (key == "plies") is >> o.random_plies;
             else if (key == "seed") is >> o.seed;
+            else if (key == "format") {
+                std::string f;
+                is >> f;
+                o.binary = f != "txt";
+            }
         }
         u.engine.stop();
         run_datagen(o);
+    } else if (token == "txt2bin") {
+        // txt2bin <out.bin> <in.txt>...: convert "fen | score | result" lines.
+        std::string out, path, line;
+        is >> out;
+        ShardWriter w(out);
+        std::vector<PackedPosition> buf;
+        std::uint64_t bad = 0;
+        while (is >> path) {
+            std::ifstream in(path);
+            while (std::getline(in, line)) {
+                auto a = line.find('|'), b = line.rfind('|');
+                Position p;
+                if (a == std::string::npos || a == b || !p.set(line.substr(0, a))) {
+                    ++bad;
+                    continue;
+                }
+                int score = std::stoi(line.substr(a + 1, b - a - 1));
+                double res = std::stod(line.substr(b + 1));
+                buf.push_back(PackedPosition::pack(p, score, res > 0.75 ? 2 : res < 0.25 ? 0 : 1));
+                if (buf.size() == 65536) w.write(buf.data(), buf.size()), buf.clear();
+            }
+        }
+        w.write(buf.data(), buf.size());
+        std::cout << "wrote " << w.count() << " positions to " << out << " (" << bad << " bad lines)" << std::endl;
+    } else if (token == "shardinfo") {
+        // shardinfo <file>...: verify shards and report record counts.
+        std::string path;
+        std::uint64_t total = 0;
+        while (is >> path) {
+            std::vector<PackedPosition> recs;
+            std::string err;
+            if (read_shard(path, recs, &err)) {
+                std::cout << path << ": " << recs.size() << " positions, checksum ok" << std::endl;
+                total += recs.size();
+            } else {
+                std::cout << path << ": INVALID (" << err << ")" << std::endl;
+            }
+        }
+        std::cout << "total " << total << " positions" << std::endl;
     } else if (token == "bench") {
         int depth = 0;
         is >> depth;
