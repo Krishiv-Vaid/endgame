@@ -1,6 +1,7 @@
 #include "uci.h"
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -189,6 +190,30 @@ bool handle_command(UciState& u, const std::string& line) {
         }
         u.engine.stop();
         run_datagen(o);
+    } else if (token == "txt2bin") {
+        // txt2bin <out.bin> <in.txt>...: convert "fen | score | result" lines.
+        std::string out, path, line;
+        is >> out;
+        ShardWriter w(out);
+        std::vector<PackedPosition> buf;
+        std::uint64_t bad = 0;
+        while (is >> path) {
+            std::ifstream in(path);
+            while (std::getline(in, line)) {
+                auto a = line.find('|'), b = line.rfind('|');
+                Position p;
+                if (a == std::string::npos || a == b || !p.set(line.substr(0, a))) {
+                    ++bad;
+                    continue;
+                }
+                int score = std::stoi(line.substr(a + 1, b - a - 1));
+                double res = std::stod(line.substr(b + 1));
+                buf.push_back(PackedPosition::pack(p, score, res > 0.75 ? 2 : res < 0.25 ? 0 : 1));
+                if (buf.size() == 65536) w.write(buf.data(), buf.size()), buf.clear();
+            }
+        }
+        w.write(buf.data(), buf.size());
+        std::cout << "wrote " << w.count() << " positions to " << out << " (" << bad << " bad lines)" << std::endl;
     } else if (token == "shardinfo") {
         // shardinfo <file>...: verify shards and report record counts.
         std::string path;

@@ -87,3 +87,6 @@ __pycache__/
 
 # fastchess autosave/resume state
 config.json
+*.pt
+*.pt.tmp
+*.nnue.tmp
