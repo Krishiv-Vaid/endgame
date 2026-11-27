@@ -8,8 +8,8 @@ project stands.
 
 | | |
 |---|---|
-| Best verified build | e7fc6eb (M2 + TT-move ordering) |
-| Bench | 15831286 (depth 6) |
+| Best verified build | 4397ac1 (M2 + TT-move ordering + SEE) |
+| Bench | 7026041 (depth 6) |
 | Latest gauntlet Elo | **2045 ± 26** CCRL Blitz (M4, 10+0.1, vs Stash 11–17; sleep forfeits excluded; 2016 ± 24 raw) — see docs/gauntlets.md |
 | Default net | — |
 
@@ -31,6 +31,7 @@ Every strength-affecting change, pass or fail.
 |---|---|---|---|---|
 | 2026-11-26 | 266a219 (merged as 609cdac) | eval: Texel-tuned HCE weights (gen 1), 4.0M self-play positions | STC 8+0.08 [0, 5]: Elo +95.3 ± 23.6, LLR 2.96, 762 games, ptnml [33, 35, 127, 67, 119] — **PASSED**. 24 games forfeited when the Mac slept on battery (lid closed); excluding those pairs: +97.9 ± 24.1 over 736 games | 2045 ± 26 |
 | 2026-11-26 | e7fc6eb | search: try the TT move first | STC 8+0.08 [0, 5]: Elo +147.2 ± 28.2, LLR 2.97, 520 games, ptnml [11, 18, 74, 66, 91] — **PASSED**. 8 games lost to a clamshell sleep; excluding those pairs: +154.7 ± 28.1 over 512 games | |
+| 2026-11-27 | 4397ac1 | search: SEE for ordering (bad captures after quiets) + pruning in qsearch and at depth <= 6 | STC 8+0.08 [0, 5]: Elo +9.1 ± 6.2, LLR 2.95, 8,480 games, ptnml [521, 705, 1647, 764, 603] — **PASSED**. 2 dev time losses (105/170 ms) coincided with a lid close at 22:19 (system stall), no sleep forfeits | |
 
 ## Notes and measurements
 
@@ -65,5 +66,5 @@ Every strength-affecting change, pass or fail.
 
 ## Next steps
 
-1. M4, in the brief's order, one branch + one SPRT each: ~~TT-move ordering~~ (+147), SEE (next, on `feat/see`), killers, counter-moves, history, null move, LMR, RFP, ...
+1. M4, in the brief's order, one branch + one SPRT each: ~~TT-move ordering~~ (+147), ~~SEE~~ (+9), killers (next), counter-moves, history, null move, LMR, RFP, ...
 2. Long runs need AC power and the lid open: on battery macOS sleeps on lid close and forfeits every running game.
