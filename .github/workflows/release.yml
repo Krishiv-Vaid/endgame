@@ -1,0 +1,115 @@
+name: Release
+
+# Tag push (v*) builds every release binary, checks it, and attaches it to a
+# GitHub Release. On pull requests that touch the release setup the same
+# builds run as a dry run without publishing anything.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'CMakeLists.txt'
+      - 'docs/release-notes/**'
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          notes="docs/release-notes/${tag}.md"
+          [ -f "$notes" ] || { echo "missing $notes"; exit 1; }
+          gh release view "$tag" >/dev/null 2>&1 || \
+            gh release create "$tag" --verify-tag --title "endgame ${tag#v}" --notes-file "$notes"
+
+  build:
+    needs: [create]
+    if: always() && (needs.create.result == 'success' || needs.create.result == 'skipped')
+    name: ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, cxx: clang++, arch: armv8-neon, asset: macos-arm64 }
+          - { os: ubuntu-24.04, cxx: g++, arch: x86-64-v2, asset: linux-x86-64-v2 }
+          - { os: ubuntu-24.04, cxx: g++, arch: avx2, asset: linux-x86-64-avx2 }
+          - { os: ubuntu-24.04, cxx: g++, arch: avx512, asset: linux-x86-64-avx512 }
+          - { os: windows-2022, cxx: clang++, arch: x86-64-v2, asset: windows-x86-64-v2 }
+          - { os: windows-2022, cxx: clang++, arch: avx2, asset: windows-x86-64-avx2 }
+          - { os: windows-2022, cxx: clang++, arch: avx512, asset: windows-x86-64-avx512 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            Linux) sudo apt-get update && sudo apt-get install -y ninja-build ;;
+            macOS) brew install ninja ;;
+            Windows) choco install ninja -y --no-progress ;;
+          esac
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DENDGAME_ARCH=${{ matrix.arch }} \
+                -DENDGAME_STATIC=ON -DENDGAME_TESTS=OFF -DENDGAME_TOOLS=OFF
+          cmake --build build
+
+      - name: Package
+        id: pkg
+        shell: bash
+        run: |
+          version=$(grep -E 'ENGINE_VERSION = "' src/uci.h | sed -E 's/.*"([^"]+)".*/\1/')
+          ext=""; [ "${{ runner.os }}" = "Windows" ] && ext=".exe"
+          name="endgame-${version}-${{ matrix.asset }}${ext}"
+          mkdir -p dist
+          cp "build/endgame${ext}" "dist/${name}"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
+      - name: Check binary
+        shell: bash
+        run: |
+          bin="dist/${{ steps.pkg.outputs.name }}"
+          # Skip running AVX-512 binaries on runners without AVX-512.
+          if [ "${{ matrix.arch }}" = "avx512" ]; then
+            if [ "${{ runner.os }}" = "Linux" ]; then grep -q avx512bw /proc/cpuinfo || { echo "no AVX-512 here, build only"; exit 0; }
+            else echo "build only (cannot detect AVX-512 here)"; exit 0; fi
+          fi
+          printf 'uci\nisready\nquit\n' | "$bin" | grep -E "^id name|uciok|readyok"
+          "$bin" bench | tail -1
+          case "${{ runner.os }}" in
+            Linux) ! ldd "$bin" 2>&1 | grep -q "=>" && echo "static: ok" ;;
+            Windows) if llvm-readobj --coff-imports "$bin" | grep -qi vcruntime; then echo "links vcruntime dynamically"; exit 1; else echo "static runtime: ok"; fi ;;
+            macOS) otool -L "$bin" ;;
+          esac
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          f="${{ steps.pkg.outputs.name }}"
+          if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          gh release upload "${GITHUB_REF_NAME}" "$f" "$f.sha256" --clobber
+
+      - name: Keep dry-run artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.name }}
+          path: dist/${{ steps.pkg.outputs.name }}
+          retention-days: 7
