@@ -79,6 +79,17 @@ void Worker::check_time() {
         stop_flag_ = true;
 }
 
+int Worker::eval(int ply) {
+    if (!net_) return evaluate(pos_);
+    int j = ply;
+    while (!acc_ok_[j]) --j;  // the root is always computed
+    for (int k = j + 1; k <= ply; ++k) {
+        nnue::update(*net_, acc_[k - 1], pos_.state_back(ply - k), acc_[k]);
+        acc_ok_[k] = true;
+    }
+    return nnue::output(*net_, acc_[ply], pos_.side_to_move());
+}
+
 void Worker::update_pv(int ply, Move m) {
     pv_[ply][0] = m;
     const int child = pv_len_[ply + 1];
@@ -109,6 +120,11 @@ SearchResult Worker::run(const Position& root, const SearchLimits& limits, bool 
     nodes_ = 0;
     stop_flag_ = false;
     engine_.tt().new_search();
+    net_ = nnue::active();
+    if (net_) {
+        nnue::refresh(*net_, pos_, acc_[0]);
+        acc_ok_[0] = true;
+    }
 
     SearchResult result;
     MoveList root_moves;
@@ -159,7 +175,7 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
     const bool in_check = pos_.in_check();
     if (!root) {
         if (pos_.is_draw(ply)) return 0;
-        if (ply >= MAX_PLY - 1) return in_check ? 0 : evaluate(pos_);
+        if (ply >= MAX_PLY - 1) return in_check ? 0 : eval(ply);
         // Mate distance pruning.
         alpha = std::max(alpha, mated_in(ply));
         beta = std::min(beta, mate_in(ply + 1));
@@ -174,7 +190,7 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
         return tte.score;
 
     int static_eval = VALUE_NONE;
-    if (!in_check) static_eval = tte.hit && tte.eval != VALUE_NONE ? tte.eval : evaluate(pos_);
+    if (!in_check) static_eval = tte.hit && tte.eval != VALUE_NONE ? tte.eval : eval(ply);
     stack_[ply].static_eval = static_eval;
 
     MoveList list;
@@ -196,7 +212,7 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
         ++move_count;
         stack_[ply].move = m;
         engine_.tt().prefetch(pos_.key_after(m));
-        pos_.make_move(m);
+        make(m, ply);
 
         int score;
         if (move_count == 1) {
@@ -244,7 +260,7 @@ int Worker::qsearch(int alpha, int beta, int ply) {
 
     const bool in_check = pos_.in_check();
     if (pos_.is_draw(ply)) return 0;
-    if (ply >= MAX_PLY - 1) return in_check ? 0 : evaluate(pos_);
+    if (ply >= MAX_PLY - 1) return in_check ? 0 : eval(ply);
 
     const Key key = pos_.key();
     const TTProbe tte = engine_.tt().probe(key, ply);
@@ -260,7 +276,7 @@ int Worker::qsearch(int alpha, int beta, int ply) {
         generate<GEN_ALL>(pos_, list);
         if (!list.size()) return mated_in(ply);
     } else {
-        static_eval = tte.hit && tte.eval != VALUE_NONE ? tte.eval : evaluate(pos_);
+        static_eval = tte.hit && tte.eval != VALUE_NONE ? tte.eval : eval(ply);
         best_score = static_eval;
         if (best_score >= beta) return best_score;
         alpha = std::max(alpha, best_score);
@@ -277,7 +293,7 @@ int Worker::qsearch(int alpha, int beta, int ply) {
         }
         // SEE pruning: captures that lose material can't help a quiet position.
         if (!in_check && !pos_.see_ge(m, 0)) continue;
-        pos_.make_move(m);
+        make(m, ply);
         const int score = -qsearch<NT>(-beta, -alpha, ply + 1);
         pos_.unmake_move();
         if (stop_flag_) return 0;
