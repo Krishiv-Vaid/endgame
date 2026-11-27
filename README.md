@@ -1,4 +1,4 @@
-# endgame
+# Endgame
 
 A UCI chess engine written from scratch in C++20: bitboard move generation, alpha-beta search and a hand-crafted evaluation tuned on the engine's own self-play games. It runs in any UCI chess GUI (Cute Chess, Arena, Banksia, En Croissant, ...) and supports standard chess and Chess960.
 
