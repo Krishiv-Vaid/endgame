@@ -97,6 +97,14 @@ jobs:
           fi
           ctest --test-dir build --output-on-failure
 
+      - name: NNUE SIMD path
+        if: steps.cpu.outputs.run == 'true'
+        shell: bash
+        run: |
+          exe=./build/endgame_tests
+          [ -f ./build/endgame_tests.exe ] && exe=./build/endgame_tests.exe
+          $exe -tc="NNUE SIMD*" -s | grep -E "SIMD path|Status"
+
       - name: Bench
         if: steps.cpu.outputs.run == 'true'
         shell: bash
