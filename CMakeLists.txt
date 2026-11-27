@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(endgame VERSION 0.0.1 LANGUAGES CXX)
+project(endgame VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,7 @@ option(ENDGAME_LTO "Enable link-time optimisation in release builds" ON)
 set(ENDGAME_PGO "off" CACHE STRING "Profile-guided optimisation: off, generate, use")
 set(ENDGAME_PGO_DIR "${CMAKE_BINARY_DIR}/pgo" CACHE PATH "Directory for PGO profiles")
 option(ENDGAME_TESTS "Build unit tests" ON)
+option(ENDGAME_STATIC "Link the engine statically (release binaries)" OFF)
 
 # ---------------------------------------------------------------------------
 # Architecture flags
@@ -122,6 +123,15 @@ target_link_libraries(endgame_core PUBLIC endgame_flags)
 
 add_executable(endgame src/main.cpp)
 target_link_libraries(endgame PRIVATE endgame_core)
+if(ENDGAME_STATIC)
+  if(WIN32)
+    # Static MSVC runtime: no vcruntime DLL needed on the user's machine.
+    set_property(TARGET endgame endgame_core PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+  elseif(NOT APPLE)
+    target_link_options(endgame PRIVATE -static)
+  endif()
+  # macOS does not support fully static binaries; libSystem is always present.
+endif()
 
 # ---------------------------------------------------------------------------
 # Tests
