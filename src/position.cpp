@@ -331,6 +331,8 @@ void Position::make_move(Move m) {
 
     s.move = m;
     s.captured = NO_PIECE;
+    s.dirty_count = 0;
+    auto dirty = [&s](Piece p, Square f, Square t) { s.dirty[s.dirty_count++] = {p, f, t}; };
     s.rule50 = prev.rule50 + 1;
     s.plies_from_null = prev.plies_from_null + 1;
     if (prev.ep_square != SQ_NONE) {
@@ -347,6 +349,8 @@ void Position::make_move(Move m) {
         remove_piece(to);
         put_piece(king, kto);
         put_piece(rook, rto);
+        dirty(king, from, kto);
+        dirty(rook, to, rto);
         Key delta = zobrist::psq[king][from] ^ zobrist::psq[king][kto] ^ zobrist::psq[rook][to] ^
                     zobrist::psq[rook][rto];
         k ^= delta;
@@ -357,12 +361,19 @@ void Position::make_move(Move m) {
             Piece cap = board_[capsq];
             s.captured = cap;
             remove_piece(capsq);
+            dirty(cap, capsq, SQ_NONE);
             k ^= zobrist::psq[cap][capsq];
             if (type_of(cap) == PAWN) s.pawn_key ^= zobrist::psq[cap][capsq];
             else s.non_pawn_key[them] ^= zobrist::psq[cap][capsq];
             s.rule50 = 0;
         }
         move_piece(from, to);
+        if (m.is_promotion()) {
+            dirty(pc, from, SQ_NONE);
+            dirty(make_piece(us, m.promotion_type()), SQ_NONE, to);
+        } else {
+            dirty(pc, from, to);
+        }
         Key delta = zobrist::psq[pc][from] ^ zobrist::psq[pc][to];
         k ^= delta;
         if (type_of(pc) == PAWN) {
@@ -443,6 +454,7 @@ void Position::make_null_move() {
     }
     s.move = Move::null();
     s.captured = NO_PIECE;
+    s.dirty_count = 0;
     s.rule50 = prev.rule50 + 1;
     s.plies_from_null = 0;
     s.checkers = 0;
