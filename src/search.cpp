@@ -21,7 +21,8 @@ struct ScoredMoves {
     int count = 0;
     int next = 0;
 
-    ScoredMoves(const Position& pos, const MoveList& list, Move tt_move = Move::none()) {
+    ScoredMoves(const Position& pos, const MoveList& list, Move tt_move = Move::none(),
+                const Move* killers = nullptr) {
         for (Move m : list) {
             int s = 0;
             if (m.is_capture()) {
@@ -32,6 +33,11 @@ struct ScoredMoves {
                 s += pos.see_ge(m, 0) ? 1000 : -1000;
             }
             if (m.is_promotion()) s += m.promotion_type() == QUEEN ? 1000 + 9 * 16 : -2000;
+            // Killers: quiet moves that recently refuted a sibling position.
+            if (killers && !m.is_noisy()) {
+                if (m == killers[0]) s = 900;
+                else if (m == killers[1]) s = 800;
+            }
             if (m == tt_move) s = 1'000'000;  // TT move first
             moves[count] = m;
             scores[count++] = s;
@@ -174,7 +180,7 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
     MoveList list;
     generate<GEN_ALL>(pos_, list);
     if (!list.size()) return in_check ? mated_in(ply) : 0;
-    ScoredMoves picker(pos_, list, tte.move);
+    ScoredMoves picker(pos_, list, tte.move, stack_[ply].killers);
 
     int best_score = -VALUE_INF;
     Move best_move = Move::none();
@@ -208,7 +214,13 @@ int Worker::search(int alpha, int beta, int depth, int ply) {
             if (score > alpha) {
                 best_move = m;
                 if (pv_node) update_pv(ply, m);
-                if (score >= beta) break;
+                if (score >= beta) {
+                    if (!m.is_noisy() && m != stack_[ply].killers[0]) {
+                        stack_[ply].killers[1] = stack_[ply].killers[0];
+                        stack_[ply].killers[0] = m;
+                    }
+                    break;
+                }
                 alpha = score;
             }
         }

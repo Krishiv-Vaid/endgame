@@ -28,6 +28,7 @@ struct SearchResult {
 struct StackEntry {
     int static_eval = VALUE_NONE;
     Move move = Move::none();
+    Move killers[2] = {Move::none(), Move::none()};
 };
 
 class Engine;
