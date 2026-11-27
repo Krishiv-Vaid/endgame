@@ -13,6 +13,13 @@ project stands.
 | Latest gauntlet Elo | **2045 ± 26** CCRL Blitz (M4, 10+0.1, vs Stash 11–17; sleep forfeits excluded; 2016 ± 24 raw) — see docs/gauntlets.md |
 | Default net | — |
 
+## Releases
+
+- **v1.0 (2026-11-27)** — shipped at the user's request from `main` at the strongest SPRT-verified build: M2 baseline
+  + Texel gen-1 HCE + TT-move ordering + SEE + killers (bench 5004669). This supersedes the brief's planned
+  `v1.0-nnue` / `v2.0` naming: later milestone tags continue as v1.x / v2.0. CCRL-scale strength of v1.0 itself is not
+  yet measured (last gauntlet 2045 ± 26 was the pre-TT-move M2 build).
+
 ## Milestones
 
 - [x] **M0 — Scaffolding**: CMake, UCI stub, doctest, CI (macOS arm64, Linux GCC/Clang AVX2, Windows Clang) — done 2026-11-25, CI green on all 7 jobs
